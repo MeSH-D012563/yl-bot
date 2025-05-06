@@ -1,0 +1,7 @@
+PyTelegramBotAPI==4.14.0
+python-dotenv==1.0.0
+simple_image_download==0.4
+beautifulsoup4==4.12.2
+requests==2.31.0
+replicate==0.22.0
+icrawler==0.6.7 
