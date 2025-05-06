@@ -5,6 +5,7 @@ from image_parser import STYLES, get_outfit_items, search_products
 from simple_image_download import simple_image_download as simp
 from dotenv import load_dotenv
 from database import OutfitDatabase
+import json
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -79,70 +80,111 @@ def show_favorites(message):
         bot.send_message(message.chat.id, response, reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('replace_'))
-def start_item_replace(call):
+def handle_replace_request(call):
     """Начать процесс замены элемента образа"""
-    outfit_id = int(call.data.split('_')[1])
-    outfit = db.get_outfit(outfit_id, call.message.chat.id)
-    
-    if not outfit:
-        bot.answer_callback_query(call.id, "Образ не найден!")
-        return
-    
-    markup = types.InlineKeyboardMarkup()
-    for i, item in enumerate(outfit['items']):
-        markup.add(types.InlineKeyboardButton(f"{i+1}. {item}", callback_data=f"replace_item_{outfit_id}_{i}"))
-    
-    bot.edit_message_text(
-        "Выберите элемент для замены:",
-        call.message.chat.id,
-        call.message.message_id,
-        reply_markup=markup
-    )
+    try:
+        outfit_id = int(call.data.split('_')[1])
+        outfit = db.get_outfit(outfit_id, call.message.chat.id)
+        
+        if not outfit:
+            bot.answer_callback_query(call.id, "Образ не найден!")
+            return
+        
+        # Получаем данные из словаря
+        items = outfit['items']  # items уже в нужном формате
+        products = outfit['products']  # products уже в нужном формате
+        
+        # Проверяем структуру данных
+        print(f"Debug - Items: {items}")
+        print(f"Debug - Products: {products}")
+        
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        for i, (item, product) in enumerate(zip(items, products)):
+            # Проверяем структуру product
+            if isinstance(product, dict):
+                product_name = product.get('name', 'Товар не найден')
+            else:
+                product_name = 'Товар не найден'
+                
+            markup.add(types.InlineKeyboardButton(
+                f"{i+1}. {item} - {product_name}",
+                callback_data=f"select_item_{outfit_id}_{i}"
+            ))
+        markup.add(types.InlineKeyboardButton("Отмена", callback_data="cancel"))
+        
+        bot.edit_message_text(
+            "Выберите элемент для замены:",
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=markup
+        )
+    except Exception as e:
+        print(f"Debug - Error in handle_replace_request: {str(e)}")
+        bot.answer_callback_query(call.id, f"Произошла ошибка: {str(e)}")
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('replace_item_'))
-def handle_item_replace(call):
+@bot.callback_query_handler(func=lambda call: call.data.startswith('select_item_'))
+def handle_item_selection(call):
     """Обработка выбора элемента для замены"""
-    _, _, outfit_id, item_index = call.data.split('_')
-    outfit_id = int(outfit_id)
-    item_index = int(item_index)
-    
-    state = user_states[call.message.chat.id]
-    state.waiting_for_item_replace = (outfit_id, item_index)
-    
-    bot.edit_message_text(
-        "Введите новый поисковый запрос для этого элемента:",
-        call.message.chat.id,
-        call.message.message_id
-    )
+    try:
+        _, _, outfit_id, item_index = call.data.split('_')
+        outfit_id = int(outfit_id)
+        item_index = int(item_index)
+        
+        # Создаем или обновляем состояние пользователя
+        if call.message.chat.id not in user_states:
+            user_states[call.message.chat.id] = UserState()
+        
+        state = user_states[call.message.chat.id]
+        state.waiting_for_item_replace = (outfit_id, item_index)
+        
+        bot.edit_message_text(
+            "Введите новый поисковый запрос для этого элемента:",
+            call.message.chat.id,
+            call.message.message_id
+        )
+    except Exception as e:
+        bot.answer_callback_query(call.id, f"Произошла ошибка: {str(e)}")
 
 @bot.message_handler(func=lambda message: user_states.get(message.chat.id, UserState()).waiting_for_item_replace is not None)
 def handle_new_item_search(message):
     """Обработка нового поискового запроса для элемента"""
-    state = user_states[message.chat.id]
-    outfit_id, item_index = state.waiting_for_item_replace
-    
-    # Ищем новый товар
-    products = search_products(message.text)
-    
-    if not products:
-        bot.send_message(message.chat.id, "Товар не найден. Попробуйте другой запрос.")
-        return
-    
-    product = products[0]
-    
-    # Обновляем элемент в образе
-    if db.update_outfit_item(outfit_id, message.chat.id, item_index, message.text, product):
-        bot.send_message(
-            message.chat.id,
-            f"Элемент успешно обновлен!\n"
-            f"Название: {product['name']}\n"
-            f"Цена: {product['price']}\n"
-            f"Ссылка: {product['link']}"
-        )
-    else:
-        bot.send_message(message.chat.id, "Не удалось обновить элемент.")
-    
-    state.waiting_for_item_replace = None
+    try:
+        state = user_states[message.chat.id]
+        outfit_id, item_index = state.waiting_for_item_replace
+        
+        # Ищем новый товар
+        products = search_products(message.text)
+        
+        if not products:
+            bot.send_message(message.chat.id, "Товар не найден. Попробуйте другой запрос.")
+            return
+        
+        product = products[0]
+        
+        # Проверяем структуру product перед обновлением
+        print(f"Debug - New product: {product}")
+        
+        # Обновляем элемент в образе
+        if db.update_outfit_item(outfit_id, message.chat.id, item_index, message.text, product):
+            bot.send_message(
+                message.chat.id,
+                f"Элемент успешно обновлен!\n"
+                f"Название: {product['name']}\n"
+                f"Цена: {product['price']}\n"
+                f"Ссылка: {product['link']}"
+            )
+        else:
+            bot.send_message(message.chat.id, "Не удалось обновить элемент.")
+        
+        # Сбрасываем состояние
+        state.waiting_for_item_replace = None
+        
+        # Показываем обновленный образ
+        show_favorites(message)
+    except Exception as e:
+        print(f"Debug - Error in handle_new_item_search: {str(e)}")
+        bot.send_message(message.chat.id, f"Произошла ошибка: {str(e)}")
+        state.waiting_for_item_replace = None
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('delete_'))
 def delete_outfit(call):

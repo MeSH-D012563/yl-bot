@@ -122,29 +122,34 @@ class OutfitDatabase:
         return None
 
     def update_outfit_item(self, outfit_id, user_id, item_index, new_item, new_product):
-        """Update a specific item in an outfit"""
-        outfit = self.get_outfit(outfit_id, user_id)
-        if not outfit:
-            return False
-            
-        items = outfit['items']
-        products = outfit['products']
-        
-        if 0 <= item_index < len(items):
+        """Обновить элемент в образе"""
+        try:
+            # Получаем текущий образ
+            outfit = self.get_outfit(outfit_id, user_id)
+            if not outfit:
+                return False
+
+            # Получаем текущие списки (они уже в нужном формате)
+            items = outfit['items']
+            products = outfit['products']
+
+            # Проверяем индекс
+            if item_index >= len(items):
+                return False
+
+            # Обновляем элемент и товар
             items[item_index] = new_item
             products[item_index] = new_product
-            
-            conn = sqlite3.connect(self.db_name)
-            c = conn.cursor()
-            
-            c.execute('''
-                UPDATE outfits 
-                SET items = ?, products = ?
-                WHERE id = ? AND user_id = ?
-            ''', (json.dumps(items), json.dumps(products), outfit_id, user_id))
-            
-            conn.commit()
-            conn.close()
-            return True
-            
-        return False 
+
+            # Обновляем в базе данных
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE outfits SET items = ?, products = ? WHERE id = ? AND user_id = ?",
+                    (json.dumps(items), json.dumps(products), outfit_id, user_id)
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Debug - Error in update_outfit_item: {str(e)}")
+            return False 
