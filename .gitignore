@@ -35,6 +35,7 @@ env/
 
 # Project specific
 downloaded_images/
+simple_images/
 *.db
 outfits.db
 *.log
