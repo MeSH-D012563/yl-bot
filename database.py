@@ -152,4 +152,19 @@ class OutfitDatabase:
                 return True
         except Exception as e:
             print(f"Debug - Error in update_outfit_item: {str(e)}")
-            return False 
+            return False
+
+    def add_rating(self, user_id, outfit_id, rating):
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO ratings (user_id, outfit_id, rating) VALUES (?, ?, ?)",
+                (user_id, outfit_id, rating)
+            )
+
+    def get_average_rating(self, outfit_id):
+        cursor = self.conn.execute(
+            "SELECT AVG(rating) FROM ratings WHERE outfit_id = ?",
+            (outfit_id,)
+        )
+        return cursor.fetchone()[0] or 0
+
