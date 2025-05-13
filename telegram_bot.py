@@ -5,6 +5,8 @@ from image_parser import STYLES, get_outfit_items, search_products
 from simple_image_download import simple_image_download as simp
 from dotenv import load_dotenv
 from database import OutfitDatabase
+from diffusers import StableDiffusionPipeline
+import torch
 import json
 
 # Загружаем переменные окружения
@@ -32,6 +34,12 @@ class UserState:
         self.current_outfit = None
         self.waiting_for_name = False
         self.waiting_for_item_replace = None
+
+def generate_outfit_image(description):
+    model_id = "stabilityai/stable-diffusion-2-base"
+    pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
+    pipe = pipe.to("cuda" if torch.cuda.is_available() else "cpu")
+    return pipe(description).images[0]
 
 @bot.message_handler(commands=['start'])
 def start(message):

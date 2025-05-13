@@ -41,6 +41,18 @@ class OutfitDatabase:
             )
         ''')
         
+        # Create ratings table if it doesn't exist
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS ratings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                outfit_id INTEGER NOT NULL,
+                rating INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (outfit_id) REFERENCES outfits(id) ON DELETE CASCADE
+            )
+        ''')
+        
         conn.commit()
         conn.close()
 
@@ -155,16 +167,48 @@ class OutfitDatabase:
             return False
 
     def add_rating(self, user_id, outfit_id, rating):
-        with self.conn:
-            self.conn.execute(
-                "INSERT INTO ratings (user_id, outfit_id, rating) VALUES (?, ?, ?)",
-                (user_id, outfit_id, rating)
-            )
+        """Add or update a rating for an outfit"""
+        conn = sqlite3.connect(self.db_name)
+        c = conn.cursor()
+        
+        # Проверяем, существует ли уже рейтинг от этого пользователя
+        c.execute('''
+            SELECT id FROM ratings 
+            WHERE user_id = ? AND outfit_id = ?
+        ''', (user_id, outfit_id))
+        
+        existing_rating = c.fetchone()
+        
+        if existing_rating:
+            # Обновляем существующий рейтинг
+            c.execute('''
+                UPDATE ratings 
+                SET rating = ?, created_at = CURRENT_TIMESTAMP 
+                WHERE user_id = ? AND outfit_id = ?
+            ''', (rating, user_id, outfit_id))
+        else:
+            # Добавляем новый рейтинг
+            c.execute('''
+                INSERT INTO ratings (user_id, outfit_id, rating)
+                VALUES (?, ?, ?)
+            ''', (user_id, outfit_id, rating))
+        
+        conn.commit()
+        conn.close()
 
     def get_average_rating(self, outfit_id):
-        cursor = self.conn.execute(
-            "SELECT AVG(rating) FROM ratings WHERE outfit_id = ?",
-            (outfit_id,)
-        )
-        return cursor.fetchone()[0] or 0
+        """Get the average rating for an outfit"""
+        conn = sqlite3.connect(self.db_name)
+        c = conn.cursor()
+        
+        c.execute('''
+            SELECT ROUND(AVG(rating), 1) 
+            FROM ratings 
+            WHERE outfit_id = ?
+        ''', (outfit_id,))
+        
+        result = c.fetchone()[0]
+        conn.close()
+        
+        return result if result is not None else 0.0
 
