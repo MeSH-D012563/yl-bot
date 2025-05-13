@@ -65,6 +65,9 @@ def show_favorites(message):
         response += f"Случай: {outfit['occasion'].capitalize()}\n"
         response += f"Создан: {outfit['created_at']}\n\n"
         response += "Элементы образа:\n"
+
+        rating = db.get_average_rating(outfit['id'])
+        response += f"Рейтинг: {rating:.1f} ★\n"
         
         for i, (item, product) in enumerate(zip(outfit['items'], outfit['products'])):
             response += f"{i+1}. {item}\n"
@@ -76,6 +79,14 @@ def show_favorites(message):
         markup.add(types.InlineKeyboardButton("Удалить", callback_data=f"delete_{outfit['id']}"))
         markup.add(types.InlineKeyboardButton("Поделиться", callback_data=f"share_{outfit['id']}"))
         markup.add(types.InlineKeyboardButton("Заменить элемент", callback_data=f"replace_{outfit['id']}"))
+
+        markup.row(
+            types.InlineKeyboardButton("★", callback_data=f"rate_{outfit['id']}_1"),
+            types.InlineKeyboardButton("★★", callback_data=f"rate_{outfit['id']}_2"),
+            types.InlineKeyboardButton("★★★", callback_data=f"rate_{outfit['id']}_3"),
+            types.InlineKeyboardButton("★★★★", callback_data=f"rate_{outfit['id']}_4"),
+            types.InlineKeyboardButton("★★★★★", callback_data=f"rate_{outfit['id']}_5")
+        )
         
         bot.send_message(message.chat.id, response, reply_markup=markup)
 
@@ -290,6 +301,15 @@ def handle_style(message):
                      reply_markup=markup)
     
     user_states[message.chat.id].current_step = 'occasion'
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('rate_'))
+def handle_rating(call):
+    try:
+        _, outfit_id, rating = call.data.split('_')
+        db.add_rating(call.from_user.id, outfit_id, rating)
+        bot.answer_callback_query(call.id, "Спасибо за оценку!")
+    except Exception as e:
+        bot.answer_callback_query(call.id, "Ошибка оценки!")
 
 @bot.message_handler(func=lambda message: user_states.get(message.chat.id, UserState()).current_step == 'occasion')
 def handle_occasion(message):
