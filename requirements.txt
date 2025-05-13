@@ -4,4 +4,12 @@ simple_image_download==0.4
 beautifulsoup4==4.12.2
 requests==2.31.0
 replicate==0.22.0
-icrawler==0.6.7 
+icrawler==0.6.7
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.0
+torchvision==0.17.0
+diffusers==0.25.0
+transformers==4.37.2
+accelerate==0.27.2
+pydantic==2.6.1
+huggingface-hub==0.19.4 
